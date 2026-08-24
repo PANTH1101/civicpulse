@@ -1,0 +1,617 @@
+const CivicIssue = require("../models/CivicIssue");
+const User = require("../models/User");
+const Department = require("../models/Department");
+
+const reportIssue = async (req, res) => {
+    try {
+        const { title, description, category, location } = req.body;
+
+        // Check required fields
+        if (!title || !description || !category || !location) {
+            return res.status(400).json({
+                message: "Title, description, category and location are required"
+            });
+        }
+
+        // Trim fields
+        const trimmedTitle = title.trim();
+        const trimmedDescription = description.trim();
+        const trimmedCategory = category.trim().toUpperCase();
+        const trimmedLocation = location.trim();
+
+        // Check for empty values after trimming
+        if (!trimmedTitle || !trimmedDescription || !trimmedCategory || !trimmedLocation) {
+            return res.status(400).json({
+                message: "Title, description, category and location cannot be empty"
+            });
+        }
+
+        // Validate category
+        const validCategories = [
+            "ROADS",
+            "WATER",
+            "ELECTRICITY",
+            "SANITATION",
+            "PUBLIC_SAFETY",
+            "HEALTHCARE",
+            "EDUCATION",
+            "ENVIRONMENT",
+            "OTHER"
+        ];
+
+        if (!validCategories.includes(trimmedCategory)) {
+            return res.status(400).json({
+                message: "Invalid category"
+            });
+        }
+
+        // Get citizen ID from authenticated user (set by middleware)
+        const citizenId = req.user.userId;
+
+        // Verify user exists and is a CITIZEN
+        const user = await User.findById(citizenId);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (user.role !== "CITIZEN") {
+            return res.status(403).json({
+                message: "Only citizens can report issues"
+            });
+        }
+
+        // Create civic issue with REPORTED status
+        const issue = await CivicIssue.create({
+            title: trimmedTitle,
+            description: trimmedDescription,
+            category: trimmedCategory,
+            location: trimmedLocation,
+            status: "REPORTED",
+            reportedBy: citizenId,
+            assignedTo: null,
+            department_id: null,
+            verifiedBy: null
+        });
+
+        // Populate reportedBy to return user details
+        await issue.populate("reportedBy", "name email");
+
+        res.status(201).json({
+            message: "Issue reported successfully",
+            issue: {
+                id: issue._id,
+                title: issue.title,
+                description: issue.description,
+                category: issue.category,
+                location: issue.location,
+                status: issue.status,
+                reportedBy: {
+                    id: issue.reportedBy._id,
+                    name: issue.reportedBy.name,
+                    email: issue.reportedBy.email
+                },
+                assignedTo: issue.assignedTo,
+                department_id: issue.department_id,
+                verifiedBy: issue.verifiedBy,
+                createdAt: issue.createdAt,
+                updatedAt: issue.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.error("Report issue error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
+const rejectIssue = async (req, res) => {
+    try {
+        const { issueId } = req.params;
+
+        // Get moderator ID from authenticated user
+        const moderatorId = req.user.userId;
+
+        // Verify user is a MODERATOR
+        const moderator = await User.findById(moderatorId);
+
+        if (!moderator) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (moderator.role !== "MODERATOR") {
+            return res.status(403).json({
+                message: "Only moderators can review issues"
+            });
+        }
+
+        // Find the issue
+        const issue = await CivicIssue.findById(issueId);
+
+        if (!issue) {
+            return res.status(404).json({
+                message: "Issue not found"
+            });
+        }
+
+        // Check if issue status is REPORTED
+        if (issue.status !== "REPORTED") {
+            return res.status(400).json({
+                message: `Cannot review issue with status ${issue.status}. Only REPORTED issues can be reviewed.`
+            });
+        }
+
+        // Reject the issue
+        issue.status = "REJECTED";
+        issue.verifiedBy = moderatorId;
+        // department_id remains null
+        await issue.save();
+
+        // Populate references
+        await issue.populate("reportedBy", "name email");
+        await issue.populate("verifiedBy", "name email");
+
+        res.status(200).json({
+            message: "Issue rejected successfully",
+            issue: {
+                id: issue._id,
+                title: issue.title,
+                description: issue.description,
+                category: issue.category,
+                location: issue.location,
+                status: issue.status,
+                reportedBy: {
+                    id: issue.reportedBy._id,
+                    name: issue.reportedBy.name,
+                    email: issue.reportedBy.email
+                },
+                verifiedBy: {
+                    id: issue.verifiedBy._id,
+                    name: issue.verifiedBy.name,
+                    email: issue.verifiedBy.email
+                },
+                assignedTo: issue.assignedTo,
+                department_id: issue.department_id,
+                createdAt: issue.createdAt,
+                updatedAt: issue.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.error("Reject issue error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
+const verifyIssue = async (req, res) => {
+    try {
+        const { issueId } = req.params;
+
+        // Get moderator ID from authenticated user
+        const moderatorId = req.user.userId;
+
+        // Verify user is a MODERATOR
+        const moderator = await User.findById(moderatorId);
+
+        if (!moderator) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (moderator.role !== "MODERATOR") {
+            return res.status(403).json({
+                message: "Only moderators can review issues"
+            });
+        }
+
+        // Find the issue
+        const issue = await CivicIssue.findById(issueId);
+
+        if (!issue) {
+            return res.status(404).json({
+                message: "Issue not found"
+            });
+        }
+
+        // Check if issue status is REPORTED
+        if (issue.status !== "REPORTED") {
+            return res.status(400).json({
+                message: `Cannot review issue with status ${issue.status}. Only REPORTED issues can be reviewed.`
+            });
+        }
+
+        // Verify the issue (status remains REPORTED, ready for department assignment)
+        issue.verifiedBy = moderatorId;
+        // status remains REPORTED
+        // department_id remains null
+        await issue.save();
+
+        // Populate references
+        await issue.populate("reportedBy", "name email");
+        await issue.populate("verifiedBy", "name email");
+
+        res.status(200).json({
+            message: "Issue verified successfully. Ready for department assignment.",
+            issue: {
+                id: issue._id,
+                title: issue.title,
+                description: issue.description,
+                category: issue.category,
+                location: issue.location,
+                status: issue.status,
+                reportedBy: {
+                    id: issue.reportedBy._id,
+                    name: issue.reportedBy.name,
+                    email: issue.reportedBy.email
+                },
+                verifiedBy: {
+                    id: issue.verifiedBy._id,
+                    name: issue.verifiedBy.name,
+                    email: issue.verifiedBy.email
+                },
+                assignedTo: issue.assignedTo,
+                department_id: issue.department_id,
+                createdAt: issue.createdAt,
+                updatedAt: issue.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.error("Verify issue error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
+const assignDepartment = async (req, res) => {
+    try {
+        const { issueId } = req.params;
+        const { department_id } = req.body;
+
+        // Check required field
+        if (!department_id) {
+            return res.status(400).json({
+                message: "department_id is required"
+            });
+        }
+
+        // Get moderator ID from authenticated user
+        const moderatorId = req.user.userId;
+
+        // Verify user is a MODERATOR
+        const moderator = await User.findById(moderatorId);
+
+        if (!moderator) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (moderator.role !== "MODERATOR") {
+            return res.status(403).json({
+                message: "Only moderators can assign departments"
+            });
+        }
+
+        // Find the issue
+        const issue = await CivicIssue.findById(issueId);
+
+        if (!issue) {
+            return res.status(404).json({
+                message: "Issue not found"
+            });
+        }
+
+        // Check if issue has been verified
+        if (!issue.verifiedBy) {
+            return res.status(400).json({
+                message: "Issue must be verified before department assignment"
+            });
+        }
+
+        // Check if issue status is REPORTED
+        if (issue.status !== "REPORTED") {
+            return res.status(400).json({
+                message: `Cannot assign department to issue with status ${issue.status}. Only verified REPORTED issues can be assigned.`
+            });
+        }
+
+        // Validate department exists
+        const department = await Department.findById(department_id);
+
+        if (!department) {
+            return res.status(404).json({
+                message: "Department not found"
+            });
+        }
+
+        // Assign department and update status
+        issue.department_id = department_id;
+        issue.status = "ASSIGNED";
+        await issue.save();
+
+        // Populate references
+        await issue.populate("reportedBy", "name email");
+        await issue.populate("verifiedBy", "name email");
+        await issue.populate("department_id", "name email mobile office_address");
+
+        res.status(200).json({
+            message: "Department assigned successfully",
+            issue: {
+                id: issue._id,
+                title: issue.title,
+                description: issue.description,
+                category: issue.category,
+                location: issue.location,
+                status: issue.status,
+                reportedBy: {
+                    id: issue.reportedBy._id,
+                    name: issue.reportedBy.name,
+                    email: issue.reportedBy.email
+                },
+                verifiedBy: {
+                    id: issue.verifiedBy._id,
+                    name: issue.verifiedBy.name,
+                    email: issue.verifiedBy.email
+                },
+                department: {
+                    id: issue.department_id._id,
+                    name: issue.department_id.name,
+                    email: issue.department_id.email,
+                    mobile: issue.department_id.mobile,
+                    office_address: issue.department_id.office_address
+                },
+                assignedTo: issue.assignedTo,
+                createdAt: issue.createdAt,
+                updatedAt: issue.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.error("Assign department error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
+const startIssue = async (req, res) => {
+    try {
+        const { issueId } = req.params;
+
+        // Get user ID from authenticated user
+        const userId = req.user.userId;
+
+        // Verify user exists and is a DEPARTMENT user
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (user.role !== "DEPARTMENT") {
+            return res.status(403).json({
+                message: "Only department users can start issues"
+            });
+        }
+
+        // Check if user has a department_id
+        if (!user.department_id) {
+            return res.status(400).json({
+                message: "Department user has no associated department"
+            });
+        }
+
+        // Find the issue
+        const issue = await CivicIssue.findById(issueId);
+
+        if (!issue) {
+            return res.status(404).json({
+                message: "Issue not found"
+            });
+        }
+
+        // Check if issue has a department
+        if (!issue.department_id) {
+            return res.status(400).json({
+                message: "Issue has no assigned department"
+            });
+        }
+
+        // Verify issue belongs to user's department
+        if (issue.department_id.toString() !== user.department_id.toString()) {
+            return res.status(403).json({
+                message: "You can only start issues assigned to your department"
+            });
+        }
+
+        // Check if issue status is ASSIGNED
+        if (issue.status !== "ASSIGNED") {
+            return res.status(400).json({
+                message: `Cannot start issue with status ${issue.status}. Only ASSIGNED issues can be started.`
+            });
+        }
+
+        // Update status to IN_PROGRESS
+        issue.status = "IN_PROGRESS";
+        await issue.save();
+
+        // Populate references
+        await issue.populate("reportedBy", "name email");
+        await issue.populate("verifiedBy", "name email");
+        await issue.populate("department_id", "name email mobile office_address");
+
+        res.status(200).json({
+            message: "Issue moved to IN_PROGRESS",
+            issue: {
+                id: issue._id,
+                title: issue.title,
+                description: issue.description,
+                category: issue.category,
+                location: issue.location,
+                status: issue.status,
+                reportedBy: issue.reportedBy ? {
+                    id: issue.reportedBy._id,
+                    name: issue.reportedBy.name,
+                    email: issue.reportedBy.email
+                } : null,
+                verifiedBy: issue.verifiedBy ? {
+                    id: issue.verifiedBy._id,
+                    name: issue.verifiedBy.name,
+                    email: issue.verifiedBy.email
+                } : null,
+                department: issue.department_id ? {
+                    id: issue.department_id._id,
+                    name: issue.department_id.name,
+                    email: issue.department_id.email,
+                    mobile: issue.department_id.mobile,
+                    office_address: issue.department_id.office_address
+                } : null,
+                assignedTo: issue.assignedTo,
+                createdAt: issue.createdAt,
+                updatedAt: issue.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.error("Start issue error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
+const resolveIssue = async (req, res) => {
+    try {
+        const { issueId } = req.params;
+
+        // Get user ID from authenticated user
+        const userId = req.user.userId;
+
+        // Verify user exists and is a DEPARTMENT user
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (user.role !== "DEPARTMENT") {
+            return res.status(403).json({
+                message: "Only department users can resolve issues"
+            });
+        }
+
+        // Check if user has a department_id
+        if (!user.department_id) {
+            return res.status(400).json({
+                message: "Department user has no associated department"
+            });
+        }
+
+        // Find the issue
+        const issue = await CivicIssue.findById(issueId);
+
+        if (!issue) {
+            return res.status(404).json({
+                message: "Issue not found"
+            });
+        }
+
+        // Check if issue has a department
+        if (!issue.department_id) {
+            return res.status(400).json({
+                message: "Issue has no assigned department"
+            });
+        }
+
+        // Verify issue belongs to user's department
+        if (issue.department_id.toString() !== user.department_id.toString()) {
+            return res.status(403).json({
+                message: "You can only resolve issues assigned to your department"
+            });
+        }
+
+        // Check if issue status is IN_PROGRESS
+        if (issue.status !== "IN_PROGRESS") {
+            return res.status(400).json({
+                message: `Cannot resolve issue with status ${issue.status}. Only IN_PROGRESS issues can be resolved.`
+            });
+        }
+
+        // Update status to RESOLVED
+        issue.status = "RESOLVED";
+        await issue.save();
+
+        // Populate references
+        await issue.populate("reportedBy", "name email");
+        await issue.populate("verifiedBy", "name email");
+        await issue.populate("department_id", "name email mobile office_address");
+
+        res.status(200).json({
+            message: "Issue resolved successfully",
+            issue: {
+                id: issue._id,
+                title: issue.title,
+                description: issue.description,
+                category: issue.category,
+                location: issue.location,
+                status: issue.status,
+                reportedBy: issue.reportedBy ? {
+                    id: issue.reportedBy._id,
+                    name: issue.reportedBy.name,
+                    email: issue.reportedBy.email
+                } : null,
+                verifiedBy: issue.verifiedBy ? {
+                    id: issue.verifiedBy._id,
+                    name: issue.verifiedBy.name,
+                    email: issue.verifiedBy.email
+                } : null,
+                department: issue.department_id ? {
+                    id: issue.department_id._id,
+                    name: issue.department_id.name,
+                    email: issue.department_id.email,
+                    mobile: issue.department_id.mobile,
+                    office_address: issue.department_id.office_address
+                } : null,
+                assignedTo: issue.assignedTo,
+                createdAt: issue.createdAt,
+                updatedAt: issue.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.error("Resolve issue error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
+module.exports = {
+    reportIssue,
+    rejectIssue,
+    verifyIssue,
+    assignDepartment,
+    startIssue,
+    resolveIssue
+};
