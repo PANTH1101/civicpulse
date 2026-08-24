@@ -1,10 +1,11 @@
 const mongoose = require("mongoose");
 
-const userSchema = new mongoose.Schema(
+const departmentSchema = new mongoose.Schema(
     {
         name: {
             type: String,
             required: true,
+            unique: true,
             trim: true
         },
 
@@ -16,21 +17,16 @@ const userSchema = new mongoose.Schema(
             trim: true
         },
 
-        password: {
+        mobile: {
             type: String,
-            required: true
+            required: true,
+            trim: true
         },
 
-        role: {
+        office_address: {
             type: String,
-            enum: ["CITIZEN", "MODERATOR", "DEPARTMENT"],
-            default: "CITIZEN"
-        },
-
-        department_id: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Department",
-            default: null
+            required: true,
+            trim: true
         }
     },
     {
@@ -38,4 +34,4 @@ const userSchema = new mongoose.Schema(
     }
 );
 
-module.exports = mongoose.model("User", userSchema);
+module.exports = mongoose.model("Department", departmentSchema);

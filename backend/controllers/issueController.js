@@ -501,6 +501,24 @@ const startIssue = async (req, res) => {
 const resolveIssue = async (req, res) => {
     try {
         const { issueId } = req.params;
+        const { resolution_description, resolution_evidence } = req.body;
+
+        // Validate resolution evidence fields
+        if (!resolution_description || !resolution_evidence) {
+            return res.status(400).json({
+                message: "Resolution description and resolution evidence are required"
+            });
+        }
+
+        // Trim and validate
+        const trimmedDescription = resolution_description.trim();
+        const trimmedEvidence = resolution_evidence.trim();
+
+        if (!trimmedDescription || !trimmedEvidence) {
+            return res.status(400).json({
+                message: "Resolution description and resolution evidence cannot be empty"
+            });
+        }
 
         // Get user ID from authenticated user
         const userId = req.user.userId;
@@ -557,14 +575,19 @@ const resolveIssue = async (req, res) => {
             });
         }
 
-        // Update status to RESOLVED
+        // Update status to RESOLVED with resolution evidence
         issue.status = "RESOLVED";
+        issue.resolution_description = trimmedDescription;
+        issue.resolution_evidence = trimmedEvidence;
+        issue.resolvedBy = userId;
+        issue.resolvedAt = new Date();
         await issue.save();
 
         // Populate references
         await issue.populate("reportedBy", "name email");
         await issue.populate("verifiedBy", "name email");
         await issue.populate("department_id", "name email mobile office_address");
+        await issue.populate("resolvedBy", "name email");
 
         res.status(200).json({
             message: "Issue resolved successfully",
@@ -592,6 +615,14 @@ const resolveIssue = async (req, res) => {
                     mobile: issue.department_id.mobile,
                     office_address: issue.department_id.office_address
                 } : null,
+                resolution_description: issue.resolution_description,
+                resolution_evidence: issue.resolution_evidence,
+                resolvedBy: issue.resolvedBy ? {
+                    id: issue.resolvedBy._id,
+                    name: issue.resolvedBy.name,
+                    email: issue.resolvedBy.email
+                } : null,
+                resolvedAt: issue.resolvedAt,
                 assignedTo: issue.assignedTo,
                 createdAt: issue.createdAt,
                 updatedAt: issue.updatedAt
