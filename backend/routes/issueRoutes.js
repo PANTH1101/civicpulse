@@ -5,13 +5,17 @@ const {
     verifyIssue,
     assignDepartment,
     startIssue,
-    resolveIssue
+    resolveIssue,
+    getMyIssues,
+    getSingleIssue
 } = require("../controllers/issueController");
 const protect = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
 router.post("/", protect, reportIssue);
+router.get("/my-issues", protect, getMyIssues);
+router.get("/:issueId", protect, getSingleIssue);
 router.patch("/:issueId/reject", protect, rejectIssue);
 router.patch("/:issueId/verify", protect, verifyIssue);
 router.patch("/:issueId/assign", protect, assignDepartment);

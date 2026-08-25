@@ -1,6 +1,7 @@
 const CivicIssue = require("../models/CivicIssue");
 const User = require("../models/User");
 const Department = require("../models/Department");
+const Notification = require("../models/Notification");
 
 const reportIssue = async (req, res) => {
     try {
@@ -78,6 +79,20 @@ const reportIssue = async (req, res) => {
 
         // Populate reportedBy to return user details
         await issue.populate("reportedBy", "name email");
+
+        // Create notifications for all moderators
+        const moderators = await User.find({ role: "MODERATOR" });
+        
+        const notificationPromises = moderators.map(moderator =>
+            Notification.create({
+                user_id: moderator._id,
+                issue_id: issue._id,
+                type: "ISSUE_REPORTED",
+                message: `New civic issue reported: ${issue.title}`
+            })
+        );
+
+        await Promise.all(notificationPromises);
 
         res.status(201).json({
             message: "Issue reported successfully",
@@ -157,6 +172,14 @@ const rejectIssue = async (req, res) => {
         // Populate references
         await issue.populate("reportedBy", "name email");
         await issue.populate("verifiedBy", "name email");
+
+        // Create notification for the citizen who reported the issue
+        await Notification.create({
+            user_id: issue.reportedBy._id,
+            issue_id: issue._id,
+            type: "ISSUE_REJECTED",
+            message: `Your civic issue '${issue.title}' has been rejected.`
+        });
 
         res.status(200).json({
             message: "Issue rejected successfully",
@@ -240,6 +263,14 @@ const verifyIssue = async (req, res) => {
         // Populate references
         await issue.populate("reportedBy", "name email");
         await issue.populate("verifiedBy", "name email");
+
+        // Create notification for the citizen who reported the issue
+        await Notification.create({
+            user_id: issue.reportedBy._id,
+            issue_id: issue._id,
+            type: "ISSUE_VERIFIED",
+            message: `Your civic issue '${issue.title}' has been verified.`
+        });
 
         res.status(200).json({
             message: "Issue verified successfully. Ready for department assignment.",
@@ -347,6 +378,23 @@ const assignDepartment = async (req, res) => {
         await issue.populate("reportedBy", "name email");
         await issue.populate("verifiedBy", "name email");
         await issue.populate("department_id", "name email mobile office_address");
+
+        // Create notifications for all department users of the assigned department
+        const departmentUsers = await User.find({
+            role: "DEPARTMENT",
+            department_id: department_id
+        });
+
+        const notificationPromises = departmentUsers.map(user =>
+            Notification.create({
+                user_id: user._id,
+                issue_id: issue._id,
+                type: "ISSUE_ASSIGNED",
+                message: `A new civic issue has been assigned to your department: ${issue.title}`
+            })
+        );
+
+        await Promise.all(notificationPromises);
 
         res.status(200).json({
             message: "Department assigned successfully",
@@ -456,6 +504,14 @@ const startIssue = async (req, res) => {
         await issue.populate("reportedBy", "name email");
         await issue.populate("verifiedBy", "name email");
         await issue.populate("department_id", "name email mobile office_address");
+
+        // Create notification for the citizen who reported the issue
+        await Notification.create({
+            user_id: issue.reportedBy._id,
+            issue_id: issue._id,
+            type: "ISSUE_STARTED",
+            message: `Your civic issue '${issue.title}' is now being worked on.`
+        });
 
         res.status(200).json({
             message: "Issue moved to IN_PROGRESS",
@@ -589,6 +645,14 @@ const resolveIssue = async (req, res) => {
         await issue.populate("department_id", "name email mobile office_address");
         await issue.populate("resolvedBy", "name email");
 
+        // Create notification for the citizen who reported the issue
+        await Notification.create({
+            user_id: issue.reportedBy._id,
+            issue_id: issue._id,
+            type: "ISSUE_RESOLVED",
+            message: `Your civic issue '${issue.title}' has been resolved.`
+        });
+
         res.status(200).json({
             message: "Issue resolved successfully",
             issue: {
@@ -638,11 +702,233 @@ const resolveIssue = async (req, res) => {
     }
 };
 
+const getMyIssues = async (req, res) => {
+    try {
+        // Get citizen ID from authenticated user
+        const userId = req.user.userId;
+
+        // Build query - only issues reported by this user
+        const query = {
+            reportedBy: userId
+        };
+
+        // Optional status filter
+        const { status, category, page, limit } = req.query;
+
+        // Validate and apply status filter
+        if (status) {
+            const validStatuses = ["REPORTED", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "REJECTED"];
+            if (validStatuses.includes(status.toUpperCase())) {
+                query.status = status.toUpperCase();
+            } else {
+                return res.status(400).json({
+                    message: "Invalid status. Valid values: REPORTED, ASSIGNED, IN_PROGRESS, RESOLVED, REJECTED"
+                });
+            }
+        }
+
+        // Validate and apply category filter
+        if (category) {
+            const validCategories = [
+                "ROADS",
+                "WATER",
+                "ELECTRICITY",
+                "SANITATION",
+                "PUBLIC_SAFETY",
+                "HEALTHCARE",
+                "EDUCATION",
+                "ENVIRONMENT",
+                "OTHER"
+            ];
+            if (validCategories.includes(category.toUpperCase())) {
+                query.category = category.toUpperCase();
+            } else {
+                return res.status(400).json({
+                    message: "Invalid category"
+                });
+            }
+        }
+
+        // Pagination
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 10;
+        const maxLimit = 50;
+
+        // Validate pagination values
+        if (pageNum < 1) {
+            return res.status(400).json({
+                message: "Page must be a positive integer"
+            });
+        }
+
+        if (limitNum < 1) {
+            return res.status(400).json({
+                message: "Limit must be a positive integer"
+            });
+        }
+
+        // Cap limit at maximum
+        const finalLimit = limitNum > maxLimit ? maxLimit : limitNum;
+
+        // Calculate skip
+        const skip = (pageNum - 1) * finalLimit;
+
+        // Get total count for pagination
+        const total = await CivicIssue.countDocuments(query);
+
+        // Get issues with pagination
+        const issues = await CivicIssue.find(query)
+            .populate("reportedBy", "name email")
+            .populate("verifiedBy", "name email")
+            .populate("department_id", "name email mobile office_address")
+            .populate("resolvedBy", "name email")
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(finalLimit);
+
+        // Calculate total pages
+        const totalPages = Math.ceil(total / finalLimit);
+
+        res.status(200).json({
+            message: "My issues retrieved successfully",
+            count: issues.length,
+            total: total,
+            page: pageNum,
+            limit: finalLimit,
+            totalPages: totalPages,
+            issues: issues.map(issue => ({
+                id: issue._id,
+                title: issue.title,
+                description: issue.description,
+                category: issue.category,
+                location: issue.location,
+                status: issue.status,
+                reportedBy: issue.reportedBy ? {
+                    id: issue.reportedBy._id,
+                    name: issue.reportedBy.name,
+                    email: issue.reportedBy.email
+                } : null,
+                verifiedBy: issue.verifiedBy ? {
+                    id: issue.verifiedBy._id,
+                    name: issue.verifiedBy.name,
+                    email: issue.verifiedBy.email
+                } : null,
+                department: issue.department_id ? {
+                    id: issue.department_id._id,
+                    name: issue.department_id.name,
+                    email: issue.department_id.email
+                } : null,
+                resolution_description: issue.resolution_description,
+                resolution_evidence: issue.resolution_evidence,
+                resolvedBy: issue.resolvedBy ? {
+                    id: issue.resolvedBy._id,
+                    name: issue.resolvedBy.name,
+                    email: issue.resolvedBy.email
+                } : null,
+                resolvedAt: issue.resolvedAt,
+                createdAt: issue.createdAt,
+                updatedAt: issue.updatedAt
+            }))
+        });
+
+    } catch (error) {
+        console.error("Get my issues error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
+const getSingleIssue = async (req, res) => {
+    try {
+        const { issueId } = req.params;
+        const userId = req.user.userId;
+
+        // Validate issue ID format
+        const mongoose = require("mongoose");
+        if (!mongoose.Types.ObjectId.isValid(issueId)) {
+            return res.status(400).json({
+                message: "Invalid issue ID"
+            });
+        }
+
+        // Find the issue
+        const issue = await CivicIssue.findById(issueId)
+            .populate("reportedBy", "name email")
+            .populate("verifiedBy", "name email")
+            .populate("department_id", "name email mobile office_address")
+            .populate("resolvedBy", "name email");
+
+        if (!issue) {
+            return res.status(404).json({
+                message: "Issue not found"
+            });
+        }
+
+        // Verify issue belongs to authenticated user
+        if (issue.reportedBy._id.toString() !== userId) {
+            return res.status(403).json({
+                message: "You can only view your own issues"
+            });
+        }
+
+        res.status(200).json({
+            message: "Issue retrieved successfully",
+            issue: {
+                id: issue._id,
+                title: issue.title,
+                description: issue.description,
+                category: issue.category,
+                location: issue.location,
+                status: issue.status,
+                reportedBy: {
+                    id: issue.reportedBy._id,
+                    name: issue.reportedBy.name,
+                    email: issue.reportedBy.email
+                },
+                verifiedBy: issue.verifiedBy ? {
+                    id: issue.verifiedBy._id,
+                    name: issue.verifiedBy.name,
+                    email: issue.verifiedBy.email
+                } : null,
+                department: issue.department_id ? {
+                    id: issue.department_id._id,
+                    name: issue.department_id.name,
+                    email: issue.department_id.email,
+                    mobile: issue.department_id.mobile,
+                    office_address: issue.department_id.office_address
+                } : null,
+                assignedTo: issue.assignedTo,
+                resolution_description: issue.resolution_description,
+                resolution_evidence: issue.resolution_evidence,
+                resolvedBy: issue.resolvedBy ? {
+                    id: issue.resolvedBy._id,
+                    name: issue.resolvedBy.name,
+                    email: issue.resolvedBy.email
+                } : null,
+                resolvedAt: issue.resolvedAt,
+                createdAt: issue.createdAt,
+                updatedAt: issue.updatedAt
+            }
+        });
+
+    } catch (error) {
+        console.error("Get single issue error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
 module.exports = {
     reportIssue,
     rejectIssue,
     verifyIssue,
     assignDepartment,
     startIssue,
-    resolveIssue
+    resolveIssue,
+    getMyIssues,
+    getSingleIssue
 };
