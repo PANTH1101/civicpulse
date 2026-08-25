@@ -22,6 +22,9 @@ const notificationRoutes = require("./routes/notificationRoutes");
 // Import feedback routes
 const feedbackRoutes = require("./routes/feedbackRoutes");
 
+// Import public notice routes
+const publicNoticeRoutes = require("./routes/publicNoticeRoutes");
+
 // Load environment variables from .env file
 dotenv.config();
 
@@ -51,6 +54,9 @@ app.use("/api/notifications", notificationRoutes);
 
 // Use feedback routes with /api/feedback prefix
 app.use("/api/feedback", feedbackRoutes);
+
+// Use public notice routes with /api/notices prefix
+app.use("/api/notices", publicNoticeRoutes);
 
 // Create a GET route for the root URL
 app.get("/", (req, res) => {
