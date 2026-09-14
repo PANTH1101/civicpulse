@@ -36,6 +36,12 @@ const civicIssueSchema = new mongoose.Schema(
             trim: true
         },
 
+        image_url: {
+            type: String,
+            default: null,
+            trim: true
+        },
+
         status: {
             type: String,
             enum: ["REPORTED", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "REJECTED"],

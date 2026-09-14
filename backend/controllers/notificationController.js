@@ -9,6 +9,7 @@ const getNotifications = async (req, res) => {
         // Find all notifications for this user
         const notifications = await Notification.find({ user_id: userId })
             .populate("issue_id", "title description category location status")
+            .populate("notice_id", "title category status")
             .sort({ createdAt: -1 });
 
         res.status(200).json({
@@ -24,6 +25,12 @@ const getNotifications = async (req, res) => {
                     title: notification.issue_id.title,
                     category: notification.issue_id.category,
                     status: notification.issue_id.status
+                } : null,
+                notice: notification.notice_id ? {
+                    id: notification.notice_id._id,
+                    title: notification.notice_id.title,
+                    category: notification.notice_id.category,
+                    status: notification.notice_id.status
                 } : null,
                 createdAt: notification.createdAt,
                 updatedAt: notification.updatedAt
@@ -50,6 +57,7 @@ const getUnreadNotifications = async (req, res) => {
             is_read: false
         })
             .populate("issue_id", "title description category location status")
+            .populate("notice_id", "title category status")
             .sort({ createdAt: -1 });
 
         res.status(200).json({
@@ -65,6 +73,12 @@ const getUnreadNotifications = async (req, res) => {
                     title: notification.issue_id.title,
                     category: notification.issue_id.category,
                     status: notification.issue_id.status
+                } : null,
+                notice: notification.notice_id ? {
+                    id: notification.notice_id._id,
+                    title: notification.notice_id.title,
+                    category: notification.notice_id.category,
+                    status: notification.notice_id.status
                 } : null,
                 createdAt: notification.createdAt,
                 updatedAt: notification.updatedAt

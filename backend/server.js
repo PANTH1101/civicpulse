@@ -1,8 +1,11 @@
+// Load environment variables FIRST, before any other imports
+require("dotenv").config();
+
 // Import Express framework
 const express = require("express");
 
-// Import dotenv to load environment variables from .env file
-const dotenv = require("dotenv");
+// Import CORS middleware
+const cors = require("cors");
 
 // Import function to connect to MongoDB
 const connectDB = require("./config/db");
@@ -25,8 +28,11 @@ const feedbackRoutes = require("./routes/feedbackRoutes");
 // Import public notice routes
 const publicNoticeRoutes = require("./routes/publicNoticeRoutes");
 
-// Load environment variables from .env file
-dotenv.config();
+// Import municipal service routes
+const serviceRoutes = require("./routes/serviceRoutes");
+
+// Import user routes (specification-compliant)
+const userRoutes = require("./routes/userRoutes");
 
 // Create an Express application
 const app = express();
@@ -36,6 +42,44 @@ const PORT = process.env.PORT || 4000;
 
 // Connect to MongoDB database
 connectDB();
+
+// ---------------------------------------------------------------------------
+// CORS Configuration (Task 10)
+// ---------------------------------------------------------------------------
+// Configure CORS to allow Flutter frontend communication
+// Supports:
+// - Flutter web/desktop: http://localhost:4000
+// - Android emulator: http://10.0.2.2:4000
+// - Physical device: http://<MAC-LAN-IP>:4000
+// ---------------------------------------------------------------------------
+const allowedOrigins = process.env.CORS_ORIGIN 
+    ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+    : ['http://localhost:3000', 'http://localhost:4000', 'http://10.0.2.2:4000'];
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps, Postman, curl)
+        if (!origin) {
+            return callback(null, true);
+        }
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            // Log rejected origin for debugging
+            console.warn(`CORS: Rejected origin ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true, // Allow cookies/authentication headers
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 600 // Cache preflight request for 10 minutes
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
 
 // Middleware to parse incoming JSON data
 app.use(express.json());
@@ -57,6 +101,17 @@ app.use("/api/feedback", feedbackRoutes);
 
 // Use public notice routes with /api/notices prefix
 app.use("/api/notices", publicNoticeRoutes);
+
+// Use municipal service routes with /api/services prefix
+// This covers both service browsing (/api/services) and service requests (/api/services/requests/*)
+app.use("/api/services", serviceRoutes);
+
+// ---------------------------------------------------------------------------
+// SPECIFICATION-COMPLIANT ENDPOINTS (/api/v1/*)
+// Task 11.1: Add /api/v1 routing structure
+// ---------------------------------------------------------------------------
+// Use user routes with /api/v1/users prefix (specification-compliant)
+app.use("/api/v1/users", userRoutes);
 
 // Create a GET route for the root URL
 app.get("/", (req, res) => {

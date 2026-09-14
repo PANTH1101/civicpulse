@@ -8,22 +8,49 @@ const notificationSchema = new mongoose.Schema(
             required: true
         },
 
+        // Set for civic issue notifications; null for service request notifications
         issue_id: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "CivicIssue",
-            required: true
+            default: null
+        },
+
+        // Set for service request notifications; null for civic issue notifications
+        service_request_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "ServiceRequest",
+            default: null
+        },
+
+        // Set for public notice notifications; null for other notification types
+        notice_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "PublicNotice",
+            default: null
         },
 
         type: {
             type: String,
             required: true,
             enum: [
+                // Civic Issue types (existing — do not modify)
                 "ISSUE_REPORTED",
                 "ISSUE_VERIFIED",
                 "ISSUE_REJECTED",
                 "ISSUE_ASSIGNED",
                 "ISSUE_STARTED",
-                "ISSUE_RESOLVED"
+                "ISSUE_RESOLVED",
+
+                // Municipal Service Request types (new)
+                "SERVICE_REQUEST_SUBMITTED",
+                "SERVICE_REQUEST_ACCEPTED",
+                "SERVICE_REQUEST_REJECTED",
+                "SERVICE_REQUEST_STARTED",
+                "SERVICE_REQUEST_COMPLETED",
+                "SERVICE_REQUEST_CANCELLED",
+
+                // Public Notice types
+                "PUBLIC_NOTICE_PUBLISHED"
             ]
         },
 

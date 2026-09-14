@@ -1,5 +1,6 @@
 const PublicNotice = require("../models/PublicNotice");
 const User = require("../models/User");
+const Notification = require("../models/Notification");
 const mongoose = require("mongoose");
 
 // Create a new public notice (DRAFT)
@@ -117,6 +118,40 @@ const publishNotice = async (req, res) => {
         // Populate creator and publisher info
         await notice.populate("createdBy", "name email role");
         await notice.populate("publishedBy", "name email role");
+
+        // Create notifications for ALL CITIZEN users
+        const citizens = await User.find({ role: "CITIZEN" });
+
+        // Check for existing notifications to prevent duplicates
+        // Get all citizen IDs who already have a notification for this notice
+        const existingNotifications = await Notification.find({
+            notice_id: notice._id,
+            type: "PUBLIC_NOTICE_PUBLISHED"
+        }).distinct("user_id");
+
+        // Filter out citizens who already received notification for this notice
+        const citizensToNotify = citizens.filter(
+            citizen => !existingNotifications.some(
+                existingUserId => existingUserId.toString() === citizen._id.toString()
+            )
+        );
+
+        // Create notifications for citizens who haven't received one yet
+        if (citizensToNotify.length > 0) {
+            const notificationPromises = citizensToNotify.map(citizen =>
+                Notification.create({
+                    user_id: citizen._id,
+                    issue_id: null,
+                    service_request_id: null,
+                    notice_id: notice._id,
+                    type: "PUBLIC_NOTICE_PUBLISHED",
+                    message: `New public notice published: ${notice.title}`,
+                    is_read: false
+                })
+            );
+
+            await Promise.all(notificationPromises);
+        }
 
         return res.status(200).json({
             message: "Notice published successfully",

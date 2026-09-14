@@ -85,13 +85,16 @@ const getMyAssignedIssues = async (req, res) => {
             });
         }
 
-        // Build query - filter by department_id
+        // Build query - ALWAYS filter by authenticated user's department_id
+        // SECURITY: Never trust client-provided department_id
         const query = {
             department_id: user.department_id
         };
 
-        // Optional status filter
-        const { status } = req.query;
+        // Optional filters
+        const { status, category, page, limit } = req.query;
+
+        // Validate and apply status filter
         if (status) {
             const validStatuses = ["REPORTED", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "REJECTED"];
             if (validStatuses.includes(status.toUpperCase())) {
@@ -103,22 +106,87 @@ const getMyAssignedIssues = async (req, res) => {
             }
         }
 
-        // Get issues assigned to this department
+        // Validate and apply category filter
+        if (category) {
+            const validCategories = [
+                "ROADS",
+                "WATER",
+                "ELECTRICITY",
+                "SANITATION",
+                "PUBLIC_SAFETY",
+                "HEALTHCARE",
+                "EDUCATION",
+                "ENVIRONMENT",
+                "OTHER"
+            ];
+            if (validCategories.includes(category.toUpperCase())) {
+                query.category = category.toUpperCase();
+            } else {
+                return res.status(400).json({
+                    message: "Invalid category. Valid values: ROADS, WATER, ELECTRICITY, SANITATION, PUBLIC_SAFETY, HEALTHCARE, EDUCATION, ENVIRONMENT, OTHER"
+                });
+            }
+        }
+
+        // Pagination
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit);
+        const maxLimit = 50;
+
+        // Validate pagination values
+        if (pageNum < 1) {
+            return res.status(400).json({
+                message: "Page must be a positive integer"
+            });
+        }
+
+        // Check if limit was provided and is valid
+        if (limit !== undefined) {
+            if (isNaN(limitNum) || limitNum < 1) {
+                return res.status(400).json({
+                    message: "Limit must be a positive integer"
+                });
+            }
+        }
+        
+        // Use default if not provided
+        const finalLimit = (limit !== undefined && !isNaN(limitNum) && limitNum > 0) 
+            ? (limitNum > maxLimit ? maxLimit : limitNum)
+            : 10;
+
+        // Calculate skip
+        const skip = (pageNum - 1) * finalLimit;
+
+        // Get total count for pagination
+        const total = await CivicIssue.countDocuments(query);
+
+        // Get issues assigned to this department with pagination
         const issues = await CivicIssue.find(query)
             .populate("reportedBy", "name email")
             .populate("verifiedBy", "name email")
             .populate("department_id", "name email mobile office_address")
-            .sort({ createdAt: -1 });
+            .populate("resolvedBy", "name email")
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(finalLimit);
+
+        // Calculate total pages
+        const totalPages = Math.ceil(total / finalLimit);
 
         res.status(200).json({
-            message: "Issues retrieved successfully",
+            message: "Department issues retrieved successfully",
             count: issues.length,
+            total: total,
+            page: pageNum,
+            limit: finalLimit,
+            totalPages: totalPages,
             issues: issues.map(issue => ({
                 id: issue._id,
                 title: issue.title,
                 description: issue.description,
                 category: issue.category,
                 location: issue.location,
+                image_url: issue.image_url,
                 status: issue.status,
                 reportedBy: issue.reportedBy ? {
                     id: issue.reportedBy._id,
@@ -133,8 +201,18 @@ const getMyAssignedIssues = async (req, res) => {
                 department: issue.department_id ? {
                     id: issue.department_id._id,
                     name: issue.department_id.name,
-                    email: issue.department_id.email
+                    email: issue.department_id.email,
+                    mobile: issue.department_id.mobile,
+                    office_address: issue.department_id.office_address
                 } : null,
+                resolution_description: issue.resolution_description,
+                resolution_evidence: issue.resolution_evidence,
+                resolvedBy: issue.resolvedBy ? {
+                    id: issue.resolvedBy._id,
+                    name: issue.resolvedBy.name,
+                    email: issue.resolvedBy.email
+                } : null,
+                resolvedAt: issue.resolvedAt,
                 createdAt: issue.createdAt,
                 updatedAt: issue.updatedAt
             }))
