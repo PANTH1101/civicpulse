@@ -54,7 +54,7 @@ connectDB();
 // ---------------------------------------------------------------------------
 const allowedOrigins = process.env.CORS_ORIGIN 
     ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-    : ['http://localhost:3000', 'http://localhost:4000', 'http://10.0.2.2:4000'];
+    : ['http://localhost:3000', 'http://localhost:4000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://10.0.2.2:4000'];
 
 const corsOptions = {
     origin: function (origin, callback) {

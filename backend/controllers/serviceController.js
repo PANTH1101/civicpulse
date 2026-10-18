@@ -74,6 +74,7 @@ const getServices = async (req, res) => {
         }
 
         const services = await MunicipalService.find(query)
+            .populate("department_id", "name email mobile office_address")
             .sort({ category: 1, name: 1 });
 
         return res.status(200).json({
@@ -84,7 +85,14 @@ const getServices = async (req, res) => {
                 name: s.name,
                 description: s.description,
                 category: s.category,
-                isActive: s.isActive
+                isActive: s.isActive,
+                department: s.department_id ? {
+                    id: s.department_id._id,
+                    name: s.department_id.name,
+                    email: s.department_id.email,
+                    mobile: s.department_id.mobile,
+                    office_address: s.department_id.office_address
+                } : null
             }))
         });
 
@@ -106,7 +114,8 @@ const getServiceById = async (req, res) => {
             return res.status(400).json({ message: "Invalid service ID format" });
         }
 
-        const service = await MunicipalService.findById(serviceId);
+        const service = await MunicipalService.findById(serviceId)
+            .populate("department_id", "name email mobile office_address");
 
         if (!service) {
             return res.status(404).json({ message: "Service not found" });
@@ -123,7 +132,14 @@ const getServiceById = async (req, res) => {
                 name: service.name,
                 description: service.description,
                 category: service.category,
-                isActive: service.isActive
+                isActive: service.isActive,
+                department: service.department_id ? {
+                    id: service.department_id._id,
+                    name: service.department_id.name,
+                    email: service.department_id.email,
+                    mobile: service.department_id.mobile,
+                    office_address: service.department_id.office_address
+                } : null
             }
         });
 
@@ -140,7 +156,9 @@ const getServiceById = async (req, res) => {
 const submitServiceRequest = async (req, res) => {
     try {
         const citizenId = req.user.userId; // Always from JWT — never from body
-        const { service_id, department_id, notes } = req.body;
+        const { service_id, notes } = req.body;
+
+        // SECURITY: Ignore any department_id sent from client — we determine it server-side
 
         // Verify caller is a CITIZEN
         const citizen = await User.findById(citizenId);
@@ -157,20 +175,14 @@ const submitServiceRequest = async (req, res) => {
         if (!service_id) {
             return res.status(400).json({ message: "service_id is required" });
         }
-        if (!department_id) {
-            return res.status(400).json({ message: "department_id is required" });
-        }
 
-        // Validate ObjectId formats
+        // Validate ObjectId format
         if (!mongoose.Types.ObjectId.isValid(service_id)) {
             return res.status(400).json({ message: "Invalid service_id format" });
         }
-        if (!mongoose.Types.ObjectId.isValid(department_id)) {
-            return res.status(400).json({ message: "Invalid department_id format" });
-        }
 
-        // Validate service exists and is active
-        const service = await MunicipalService.findById(service_id);
+        // Validate service exists and is active, and populate its department
+        const service = await MunicipalService.findById(service_id).populate("department_id");
         if (!service) {
             return res.status(404).json({ message: "Service not found" });
         }
@@ -178,10 +190,12 @@ const submitServiceRequest = async (req, res) => {
             return res.status(400).json({ message: "This service is not currently available" });
         }
 
-        // Validate department exists
-        const department = await Department.findById(department_id);
-        if (!department) {
-            return res.status(404).json({ message: "Department not found" });
+        // Auto-assign department from the service (business rule enforcement)
+        const department_id = service.department_id._id;
+
+        // Validate department exists (should always be true if service has valid department_id)
+        if (!service.department_id) {
+            return res.status(500).json({ message: "Service has no assigned department" });
         }
 
         // Sanitise optional notes
@@ -191,7 +205,7 @@ const submitServiceRequest = async (req, res) => {
             if (trimmedNotes.length === 0) trimmedNotes = null;
         }
 
-        // Create the service request — citizen_id from JWT, not body
+        // Create the service request — department_id from service, not from client
         const serviceRequest = await ServiceRequest.create({
             service_id,
             department_id,
@@ -313,7 +327,7 @@ const getMyServiceRequests = async (req, res) => {
 // ---------------------------------------------------------------------------
 const getServiceRequestById = async (req, res) => {
     try {
-        const citizenId = req.user.userId;
+        const userId = req.user.userId;
         const { requestId } = req.params;
 
         if (!mongoose.Types.ObjectId.isValid(requestId)) {
@@ -329,10 +343,40 @@ const getServiceRequestById = async (req, res) => {
             return res.status(404).json({ message: "Service request not found" });
         }
 
-        // Ownership check — citizen can only see their own requests
-        if (serviceRequest.citizen_id._id.toString() !== citizenId) {
+        // Get the requesting user to check role
+        const requestingUser = await User.findById(userId);
+        if (!requestingUser) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Access control:
+        // - Citizens can only view their own requests
+        // - Departments can only view requests assigned to their department
+        // - Moderators can view all requests (if needed in future)
+        
+        if (requestingUser.role === "CITIZEN") {
+            if (serviceRequest.citizen_id._id.toString() !== userId) {
+                return res.status(403).json({
+                    message: "Access denied: You can only view your own service requests"
+                });
+            }
+        } else if (requestingUser.role === "DEPARTMENT") {
+            if (!requestingUser.department_id) {
+                return res.status(400).json({
+                    message: "Department user has no associated department"
+                });
+            }
+            if (serviceRequest.department_id._id.toString() !== requestingUser.department_id.toString()) {
+                return res.status(403).json({
+                    message: "Access denied: This request is not assigned to your department"
+                });
+            }
+        } else if (requestingUser.role === "MODERATOR") {
+            // Moderators can view all service requests (for now)
+            // In future, might want to restrict this
+        } else {
             return res.status(403).json({
-                message: "Access denied: You can only view your own service requests"
+                message: "Access denied: Invalid role"
             });
         }
 

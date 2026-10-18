@@ -1,5 +1,6 @@
 const express = require("express");
 const {
+    getAllDepartments,
     getMyDepartment,
     getMyAssignedIssues
 } = require("../controllers/departmentController");
@@ -9,6 +10,9 @@ const {
 const protect = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+// Get all departments (for citizen service request selection)
+router.get("/", protect, getAllDepartments);
 
 // Existing civic issue routes (unchanged)
 router.get("/me", protect, getMyDepartment);

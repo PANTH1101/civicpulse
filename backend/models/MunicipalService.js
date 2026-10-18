@@ -34,6 +34,12 @@ const municipalServiceSchema = new mongoose.Schema(
         isActive: {
             type: Boolean,
             default: true
+        },
+
+        department_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Department",
+            required: true
         }
     },
     {

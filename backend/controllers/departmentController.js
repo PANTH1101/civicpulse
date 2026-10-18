@@ -2,6 +2,33 @@ const User = require("../models/User");
 const Department = require("../models/Department");
 const CivicIssue = require("../models/CivicIssue");
 
+// Get all departments (for citizen service request selection)
+const getAllDepartments = async (req, res) => {
+    try {
+        // Fetch all departments from database
+        const departments = await Department.find().sort({ name: 1 });
+
+        res.status(200).json({
+            message: "Departments retrieved successfully",
+            count: departments.length,
+            departments: departments.map(dept => ({
+                id: dept._id,
+                name: dept.name,
+                email: dept.email,
+                mobile: dept.mobile,
+                office_address: dept.office_address
+            }))
+        });
+
+    } catch (error) {
+        console.error("Get all departments error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
 const getMyDepartment = async (req, res) => {
     try {
         // Get user ID from authenticated user
@@ -228,6 +255,7 @@ const getMyAssignedIssues = async (req, res) => {
 };
 
 module.exports = {
+    getAllDepartments,
     getMyDepartment,
     getMyAssignedIssues
 };

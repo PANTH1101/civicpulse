@@ -933,11 +933,36 @@ const getSingleIssue = async (req, res) => {
             });
         }
 
-        // Verify issue belongs to authenticated user
-        if (issue.reportedBy._id.toString() !== userId) {
+        // Authorization: 
+        // - Citizens can only view their own issues
+        // - Moderators can view any issue
+        // - Departments can only view issues assigned to their department
+        const userRole = req.user.role;
+        const isCitizen = userRole === 'CITIZEN';
+        const isOwner = issue.reportedBy._id.toString() === userId;
+        const isModerator = userRole === 'MODERATOR';
+        const isDepartment = userRole === 'DEPARTMENT';
+        
+        if (isCitizen && !isOwner) {
             return res.status(403).json({
                 message: "You can only view your own issues"
             });
+        }
+
+        // Department users can only view issues assigned to their department
+        if (isDepartment) {
+            const user = await User.findById(userId);
+            if (!user || !user.department_id) {
+                return res.status(403).json({
+                    message: "Department user has no associated department"
+                });
+            }
+            
+            if (!issue.department_id || issue.department_id._id.toString() !== user.department_id.toString()) {
+                return res.status(403).json({
+                    message: "You can only view issues assigned to your department"
+                });
+            }
         }
 
         res.status(200).json({
