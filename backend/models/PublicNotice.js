@@ -28,10 +28,26 @@ const publicNoticeSchema = new mongoose.Schema(
             ]
         },
 
+        department_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Department",
+            required: true
+        },
+
         status: {
             type: String,
             enum: ["DRAFT", "PUBLISHED"],
             default: "DRAFT"
+        },
+
+        startDate: {
+            type: Date,
+            default: null
+        },
+
+        endDate: {
+            type: Date,
+            default: null
         },
 
         createdBy: {
