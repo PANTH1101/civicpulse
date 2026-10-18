@@ -22,12 +22,17 @@ import { ModeratorDashboard } from '../pages/ModeratorDashboard';
 import { ModeratorIssues } from '../pages/ModeratorIssues';
 import { ModeratorIssueDetails } from '../pages/ModeratorIssueDetails';
 import { ModeratorNotifications } from '../pages/ModeratorNotifications';
+import { ModeratorPublicNotices } from '../pages/ModeratorPublicNotices';
+import { ModeratorNoticeDetails } from '../pages/ModeratorNoticeDetails';
 import { DepartmentDashboard } from '../pages/DepartmentDashboard';
 import { DepartmentIssues } from '../pages/DepartmentIssues';
 import { DepartmentIssueDetails } from '../pages/DepartmentIssueDetails';
 import { DepartmentServiceRequests } from '../pages/DepartmentServiceRequests';
 import { DepartmentServiceRequestDetails } from '../pages/DepartmentServiceRequestDetails';
 import { DepartmentNotifications } from '../pages/DepartmentNotifications';
+import { DepartmentNotices } from '../pages/DepartmentNotices';
+import { DepartmentCreateNotice } from '../pages/DepartmentCreateNotice';
+import { DepartmentNoticeDetails } from '../pages/DepartmentNoticeDetails';
 
 export const AppRoutes = () => {
   return (
@@ -169,6 +174,22 @@ export const AppRoutes = () => {
         } 
       />
       <Route 
+        path="/moderator/notices" 
+        element={
+          <ProtectedRoute allowedRoles={['MODERATOR']}>
+            <ModeratorPublicNotices />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/moderator/notices/:id" 
+        element={
+          <ProtectedRoute allowedRoles={['MODERATOR']}>
+            <ModeratorNoticeDetails />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
         path="/moderator/profile" 
         element={
           <ProtectedRoute allowedRoles={['MODERATOR']}>
@@ -233,6 +254,30 @@ export const AppRoutes = () => {
         element={
           <ProtectedRoute allowedRoles={['DEPARTMENT']}>
             <DepartmentNotifications />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/department/notices" 
+        element={
+          <ProtectedRoute allowedRoles={['DEPARTMENT']}>
+            <DepartmentNotices />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/department/create-notice" 
+        element={
+          <ProtectedRoute allowedRoles={['DEPARTMENT']}>
+            <DepartmentCreateNotice />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/department/notices/:id" 
+        element={
+          <ProtectedRoute allowedRoles={['DEPARTMENT']}>
+            <DepartmentNoticeDetails />
           </ProtectedRoute>
         } 
       />

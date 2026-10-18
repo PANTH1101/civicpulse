@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Building2, LayoutDashboard, AlertCircle, User as UserIcon, LogOut, Menu, X, Bell, Package } from 'lucide-react';
+import { Building2, LayoutDashboard, AlertCircle, User as UserIcon, LogOut, Menu, X, Bell, Package, Megaphone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import './layouts.css';
 
@@ -34,6 +34,11 @@ export const DepartmentDashboardLayout = ({ children }) => {
       path: '/department/service-requests',
       icon: Package,
       label: 'Service Requests'
+    },
+    {
+      path: '/department/notices',
+      icon: Megaphone,
+      label: 'Public Notices'
     },
     {
       path: '/department/notifications',
