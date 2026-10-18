@@ -49,7 +49,7 @@ export const NoticeDetails = () => {
     }
   };
 
-  const formatDate = (dateString) => {
+  const formatDateTime = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
       year: 'numeric', 
@@ -57,6 +57,18 @@ export const NoticeDetails = () => {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
+    });
+  };
+
+  const formatDateOnly = (dateString) => {
+    // Extract just the date part to avoid timezone conversion issues
+    const datePart = dateString.split('T')[0];
+    const [year, month, day] = datePart.split('-');
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric'
     });
   };
 
@@ -114,21 +126,35 @@ export const NoticeDetails = () => {
             </div>
 
             {/* Title */}
-            <h2 style={{fontSize: '2rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '1.5rem', lineHeight: '1.3'}}>
+            <h2 style={{fontSize: '2.5rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '1.5rem', lineHeight: '1.3'}}>
               {notice.title}
             </h2>
 
             {/* Meta Information */}
             <div style={{display: 'flex', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--border-color)'}}>
-              <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem'}}>
-                <Calendar size={16} />
-                <span>Published: {formatDate(notice.publishedAt)}</span>
-              </div>
-              
-              {notice.publishedBy && (
+              {notice.department && (
                 <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem'}}>
                   <User size={16} />
-                  <span>By: {notice.publishedBy.name} ({notice.publishedBy.role})</span>
+                  <span><strong>Department:</strong> {notice.department.name}</span>
+                </div>
+              )}
+              
+              <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem'}}>
+                <Calendar size={16} />
+                <span><strong>Published:</strong> {formatDateTime(notice.publishedAt)}</span>
+              </div>
+
+              {notice.startDate && (
+                <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem'}}>
+                  <Calendar size={16} />
+                  <span><strong>Valid From:</strong> {formatDateOnly(notice.startDate)}</span>
+                </div>
+              )}
+
+              {notice.endDate && (
+                <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem'}}>
+                  <Calendar size={16} />
+                  <span><strong>Valid Until:</strong> {formatDateOnly(notice.endDate)}</span>
                 </div>
               )}
             </div>
@@ -152,7 +178,7 @@ export const NoticeDetails = () => {
                 style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}
               >
                 <ArrowLeft size={16} />
-                Back to All Notices
+                Back to Public Notices
               </Button>
             </div>
           </Card>
