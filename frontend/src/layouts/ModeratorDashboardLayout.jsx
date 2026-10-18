@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Building2, LayoutDashboard, AlertCircle, User, LogOut, Bell } from 'lucide-react';
+import { Building2, LayoutDashboard, AlertCircle, User, LogOut, Bell, Megaphone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import './layouts.css';
 
@@ -52,6 +52,13 @@ export const ModeratorDashboardLayout = ({ children }) => {
           >
             <AlertCircle size={20} />
             Civic Issues
+          </Link>
+          <Link 
+            to="/moderator/notices" 
+            className={`sidebar-link ${location.pathname.includes('/moderator/notices') ? 'active' : ''}`}
+          >
+            <Megaphone size={20} />
+            Public Notices
           </Link>
           <Link 
             to="/moderator/notifications" 
