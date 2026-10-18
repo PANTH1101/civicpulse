@@ -59,7 +59,7 @@ CivicPulse is a modern web application designed to bridge the gap between citize
 - ✅ Review all reported civic issues
 - ✅ Approve genuine issues and auto-assign to departments
 - ✅ Reject spam/invalid issues with feedback
-- ✅ Create and publish public notices
+- ✅ View published public notices (read-only)
 - ✅ Monitor overall system activity
 - ✅ Receive notifications when issues are reported
 
@@ -69,6 +69,8 @@ CivicPulse is a modern web application designed to bridge the gap between citize
 - ✅ Accept/Reject service requests
 - ✅ Upload resolution evidence (photos)
 - ✅ Manage municipal service offerings
+- ✅ Create and publish public notices
+- ✅ Manage department-specific notices (drafts & published)
 - ✅ Receive notifications on new assignments
 
 ---
@@ -308,8 +310,11 @@ Authorization: Bearer <your_jwt_token>
 - `PATCH /departments/issues/:id/status` - Update issue status
 
 #### Public Notices
-- `GET /notices` - Get all public notices
-- `POST /notices` - Create notice (Moderator)
+- `GET /notices` - Get all published notices (All authenticated users)
+- `POST /notices` - Create notice draft (Department)
+- `GET /notices/all` - Get department's notices (Department)
+- `GET /notices/:id` - Get notice details (All authenticated users)
+- `PATCH /notices/:id/publish` - Publish notice (Department)
 
 #### Notifications
 - `GET /notifications` - Get user's notifications
@@ -396,11 +401,14 @@ Authorization: Bearer <your_jwt_token>
 {
   title: String,
   content: String,
-  category: String,
-  priority: Enum (LOW, MEDIUM, HIGH),
-  validFrom: Date,
-  validUntil: Date,
-  createdBy: ObjectId (ref: User) // Moderator
+  category: Enum (GENERAL, EMERGENCY, MAINTENANCE, EVENT, POLICY, ANNOUNCEMENT, OTHER),
+  status: Enum (DRAFT, PUBLISHED),
+  department_id: ObjectId (ref: Department),
+  startDate: Date (optional),
+  endDate: Date (optional),
+  createdBy: ObjectId (ref: User), // Department user
+  publishedBy: ObjectId (ref: User), // Department user
+  publishedAt: Date
 }
 ```
 
